@@ -209,7 +209,6 @@ export function initLegacyApp() {
     function doSearch() {
       const inputEl = document.getElementById('searchInput');
       const q = (inputEl && (inputEl.value || '').trim()) || '';
-      console.debug('doSearch invoked, query=', q);
       if (!q) { alert('Type a search term like "Sun"'); return; }
       doSearchWithQ(q);
       navigateTo('#search-'+encodeURIComponent(q));
@@ -235,21 +234,23 @@ export function initLegacyApp() {
 
     function doSearchWithQ(rawQ) {
       const q = (rawQ||'').trim().toLowerCase();
-      // Match artworks by title or description
-      let artResults = store.artworks.filter(a => (a.title||'').toLowerCase().includes(q) || (a.description||'').toLowerCase().includes(q));
-      // Also include artworks whose artist name or bio match the query
-      const artistMatches = store.artists.filter(a => (a.name||'').toLowerCase().includes(q) || (a.bio||'').toLowerCase().includes(q)).map(a=>a.id);
-      if (artistMatches.length) {
-        const fromArtist = store.artworks.filter(a => artistMatches.includes(a.artistId));
-        // merge unique
-        const existingIds = new Set(artResults.map(a=>a.id));
-        fromArtist.forEach(a=> { if (!existingIds.has(a.id)) { artResults.push(a); existingIds.add(a.id); } });
-      }
-
+      // artworks that match title/description
+      const byText = store.artworks.filter(a => (a.title||'').toLowerCase().includes(q) || (a.description||'').toLowerCase().includes(q));
+      // artists that match name/bio
       const artistResults = store.artists.filter(a => (a.name||'').toLowerCase().includes(q) || (a.bio||'').toLowerCase().includes(q));
-      console.debug('doSearchWithQ', { q, artResultsCount: artResults.length, artistResultsCount: artistResults.length });
+      // include artworks whose artist matches the query
+      const byArtistMatch = store.artworks.filter(a => {
+        const artArtist = artistById(a.artistId);
+        if (!artArtist) return false;
+        return (artArtist.name||'').toLowerCase().includes(q) || (artArtist.bio||'').toLowerCase().includes(q);
+      });
+      // merge and dedupe artwork results
+      const mergedArtsMap = {};
+      byText.concat(byArtistMatch).forEach(a => { mergedArtsMap[a.id] = a; });
+      const artResults = Object.keys(mergedArtsMap).map(k => mergedArtsMap[k]);
+
       renderTemplateSearch(artResults, artistResults);
-      try { const inputEl = document.getElementById('searchInput'); if (inputEl) inputEl.value = rawQ; } catch(e){}
+      const si = document.getElementById('searchInput'); if (si) si.value = rawQ;
     }
 
     function renderTemplateSearch(arts, artists) {
@@ -360,11 +361,28 @@ export function initLegacyApp() {
       const list = document.getElementById('artistArtList');
       artistArts.forEach(a=>{
         const r = document.createElement('div'); r.className='list-row';
+        // show delete button to artist owner next to price
+        const delBtnHtml = (currentUser && currentUser.role==='artist' && currentUser.artistId===artist.id) ? `<button class="btn secondary" data-artid="${a.id}">Delete</button>` : '';
         r.innerHTML = `<div class="thumb"><img src="${a.image}" alt=""></div>
       <div class="meta"><strong><a href="#art-${a.id}">${escapeHtml(a.title)}</a></strong><div class="muted">${escapeHtml((a.description||'').substring(0,120))}...</div></div>
-      <div style="min-width:90px;text-align:right"><div class="muted">₹${a.price}</div></div>`;
+      <div style="min-width:140px;text-align:right"><div class="muted">₹${a.price}</div><div style="margin-top:6px">${delBtnHtml}</div></div>`;
         list.appendChild(r);
       });
+
+      // Attach delegated handler for delete buttons inside the artist list
+      if (list) {
+        list.addEventListener('click', (ev) => {
+          const btn = ev.target.closest && ev.target.closest('button[data-artid]');
+          if (btn) {
+            const aid = btn.getAttribute('data-artid');
+            const ok = confirm('Delete this artwork? This action cannot be undone.');
+            if (!ok) return;
+            deleteArtworkById(aid);
+            // re-render artist page to reflect change
+            renderArtistPage(artist.id);
+          }
+        });
+      }
 
       // Attach handler for uploading new artwork (visible only to the artist owner)
       const uploadBtn = document.getElementById('uploadArtBtn');
@@ -377,9 +395,9 @@ export function initLegacyApp() {
     const homeBtn = document.getElementById('homeBtn');
     if (homeBtn) {
       homeBtn.addEventListener('click', () => {
-        // Navigate to home and reset key UI pieces
-        navigateTo('#home');
-        try { if (searchInput) searchInput.value = ''; } catch(e){}
+  // Navigate to home and reset key UI pieces
+  navigateTo('#home');
+  try { const _si = document.getElementById('searchInput'); if (_si) _si.value = ''; } catch(e){}
         calDate = new Date();
         renderCalendar();
         renderCarousel();
@@ -668,7 +686,21 @@ export function initLegacyApp() {
       store.users.filter(u=>u.role==='artist' && u.artistId===id).forEach(u=>u.verified=true);
       saveStore(store); alert('Artist approved.'); renderAdminPanel();
     }
-    function deleteEventById(id) { store.events = store.events.filter(e=>e.id!==id); saveStore(store); alert('Event removed'); renderAdminPanel(); renderCalendar(); }
+        function deleteEventById(id) { store.events = store.events.filter(e=>e.id!==id); saveStore(store); alert('Event removed'); renderAdminPanel(); renderCalendar(); }
+
+        function deleteArtworkById(id) {
+          const art = store.artworks.find(a=>a.id===id);
+          if (!art) return alert('Artwork not found');
+          store.artworks = store.artworks.filter(a=>a.id!==id);
+          // remove from any events that referenced it
+          store.events = store.events.map(ev => ({ ...ev, items: (ev.items || []).filter(i => i !== id) }));
+          saveStore(store);
+          alert('Artwork removed.');
+          // update widgets
+          updateHeader(); renderCarousel(); renderRecentList(); renderCalendar();
+          // if current route included this art, navigate home
+          if (location.hash && location.hash.includes(id)) navigateTo('#home');
+        }
 
     function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
     function ensureLoggedIn() { if (currentUser) return true; alert('Please login first.'); navigateTo('#login'); return false; }
