@@ -205,24 +205,51 @@ export function initLegacyApp() {
     if (nextBtn) nextBtn.addEventListener('click', ()=> { calDate.setMonth(calDate.getMonth()+1); renderCalendar(); });
 
     /* ====== Search ====== */
-    const searchInput = document.getElementById('searchInput');
-    const searchBtn = document.getElementById('searchBtn');
-    if (searchBtn) searchBtn.addEventListener('click', doSearch);
-    if (searchInput) searchInput.addEventListener('keydown', e=> { if (e.key==='Enter') doSearch(); });
-
+    // Use delegated handlers and read the input element at runtime so listeners remain valid
     function doSearch() {
-      const q = (searchInput.value || '').trim();
+      const inputEl = document.getElementById('searchInput');
+      const q = (inputEl && (inputEl.value || '').trim()) || '';
+      console.debug('doSearch invoked, query=', q);
       if (!q) { alert('Type a search term like "Sun"'); return; }
       doSearchWithQ(q);
       navigateTo('#search-'+encodeURIComponent(q));
     }
 
+    // Delegated click for search button (works even if the button node is recreated)
+    document.addEventListener('click', (ev) => {
+      const target = ev.target;
+      if (!target) return;
+      if (target.id === 'searchBtn' || (target.closest && target.closest('#searchBtn'))) {
+        doSearch();
+      }
+    });
+
+    // Global key listener: Enter inside the search input runs search
+    document.addEventListener('keydown', (e) => {
+      const active = document.activeElement;
+      if (e.key === 'Enter' && active && active.id === 'searchInput') {
+        e.preventDefault();
+        doSearch();
+      }
+    });
+
     function doSearchWithQ(rawQ) {
       const q = (rawQ||'').trim().toLowerCase();
-      const artResults = store.artworks.filter(a => (a.title||'').toLowerCase().includes(q) || (a.description||'').toLowerCase().includes(q));
+      // Match artworks by title or description
+      let artResults = store.artworks.filter(a => (a.title||'').toLowerCase().includes(q) || (a.description||'').toLowerCase().includes(q));
+      // Also include artworks whose artist name or bio match the query
+      const artistMatches = store.artists.filter(a => (a.name||'').toLowerCase().includes(q) || (a.bio||'').toLowerCase().includes(q)).map(a=>a.id);
+      if (artistMatches.length) {
+        const fromArtist = store.artworks.filter(a => artistMatches.includes(a.artistId));
+        // merge unique
+        const existingIds = new Set(artResults.map(a=>a.id));
+        fromArtist.forEach(a=> { if (!existingIds.has(a.id)) { artResults.push(a); existingIds.add(a.id); } });
+      }
+
       const artistResults = store.artists.filter(a => (a.name||'').toLowerCase().includes(q) || (a.bio||'').toLowerCase().includes(q));
+      console.debug('doSearchWithQ', { q, artResultsCount: artResults.length, artistResultsCount: artistResults.length });
       renderTemplateSearch(artResults, artistResults);
-      if (searchInput) searchInput.value = rawQ;
+      try { const inputEl = document.getElementById('searchInput'); if (inputEl) inputEl.value = rawQ; } catch(e){}
     }
 
     function renderTemplateSearch(arts, artists) {
