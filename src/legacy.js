@@ -15,7 +15,7 @@ export function initLegacyApp() {
         { id:'a2', name:'Meera Rao', bio:'Textile & folk art revivalist.', verified:true, photo:'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=60' }
       ],
       artworks: [
-        { id:'art1', title:"Sun Wukong's Might", artistId:'a1', description:'A dramatic oil painting inspired by myth and sunlight. Cultural notes: references to East Asian myth of the Great Monkey King.', image:'https://images.unsplash.com/photo-1504198453319-5ce911bafcde?auto=format&fit=crop&w=900&q=80', price:1200, featured:true, videos:[] },
+        { id:'art1', title:"Sun Wukong's Might", artistId:'a1', description:'A dramatic oil painting inspired by myth and sunlight. Cultural notes: references to East Asian myth of the Great Monkey King.', image:'https://www.outregallery.com/cdn/shop/files/JedHenry-TheDestinedOn1.jpg?v=1730171536&width=949', price:1200, featured:true, videos:[] },
         { id:'art2', title:'Threads of Home', artistId:'a2', description:'A woven tapestry reimagining rural patterns. Cultural notes: traditional weaving motifs.', image:'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80', price:800, featured:true, videos:[] },
         { id:'art3', title:'Golden Hour Study', artistId:'a1', description:'Study in light and shadow, capturing late afternoon.', image:'https://images.unsplash.com/photo-1481349518771-20055b2a7b24?auto=format&fit=crop&w=900&q=80', price:450, featured:false, videos:[] }
       ],
