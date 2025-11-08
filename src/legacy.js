@@ -297,6 +297,14 @@ export function initLegacyApp() {
       const si = document.getElementById('searchInput'); if (si) si.value = rawQ;
     }
 
+    // Expose a minimal JS API so React components can invoke search reliably
+    try {
+      if (typeof window !== 'undefined') {
+        window.fedfDoSearch = doSearch;
+        window.fedfDoSearchWithQ = doSearchWithQ;
+      }
+    } catch (e) { /* ignore */ }
+
     function renderTemplateSearch(arts, artists, rawQ) {
       const template = document.getElementById('searchResultsTemplate');
       if (!template) return;

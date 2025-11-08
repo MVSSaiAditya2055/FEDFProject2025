@@ -8,8 +8,10 @@ export default function Header(){
 
       <div className="search-container">
         <div className="search" role="search">
-          <input id="searchInput" type="search" placeholder="Search artists, art pieces, keywords (e.g. Sun)..." aria-label="Search" />
-          <button id="searchBtn">Search</button>
+          <input id="searchInput" type="search" placeholder="Search artists, art pieces, keywords (e.g. Sun)..." aria-label="Search"
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (window && window.fedfDoSearch) window.fedfDoSearch(); } }}
+          />
+          <button id="searchBtn" onClick={() => { if (window && window.fedfDoSearch) window.fedfDoSearch(); else { const el = document.getElementById('searchBtn'); if (el) el.click(); } }}>Search</button>
         </div>
       </div>
 
