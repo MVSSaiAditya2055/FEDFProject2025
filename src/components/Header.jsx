@@ -3,7 +3,7 @@ import React from 'react'
 export default function Header(){
   return (
     <header>
-      <button id="homeBtn" className="btn home-btn" title="Home" aria-label="Home">🏠</button>
+  <button id="homeBtn" className="btn home-btn" title="Home" aria-label="Home">Home</button>
       <div className="brand">Virtual Art Gallery — FEDF-PS16</div>
 
       <div className="search-container">

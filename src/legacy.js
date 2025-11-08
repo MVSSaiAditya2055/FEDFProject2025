@@ -6,7 +6,9 @@ export function initLegacyApp() {
     const seed = {
       users: [
         { id: 'u_admin', name:'Admin', email:'admin@gallery.test', password:'adminpass', role:'admin', verified:true },
-        { id: 'u_v1', name:'Asha Visitor', email:'asha@visitor.test', password:'pass123', role:'visitor', verified:true }
+        { id: 'u_v1', name:'Asha Visitor', email:'asha@visitor.test', password:'pass123', role:'visitor', verified:true },
+        // seed curator account
+        { id: 'u_curator', name:'K. Curator', email:'curator@gallery.test', password:'curpass', role:'curator', verified:true }
       ],
       artists: [
         { id:'a1', name:'John Sun', bio:'Contemporary painter exploring light and mythology.', verified:true, photo:'https://images.unsplash.com/photo-1607746882042-944635dfe10e?auto=format&fit=crop&w=300&q=60' },
@@ -39,6 +41,28 @@ export function initLegacyApp() {
 
     let store = loadStore();
     let currentUser = loadCurrentUser();
+
+    // Ensure seeded entries exist in store (useful when localStorage was created before adding new seeds)
+    (function ensureSeedMerged(){
+      let changed = false;
+      // users by email
+      seed.users.forEach(su => {
+        if (!store.users.some(u => u.email === su.email)) { store.users.push(su); changed = true; }
+      });
+      // artists by id
+      seed.artists.forEach(sa => {
+        if (!store.artists.some(a => a.id === sa.id)) { store.artists.push(sa); changed = true; }
+      });
+      // artworks by id
+      seed.artworks.forEach(sa => {
+        if (!store.artworks.some(a => a.id === sa.id)) { store.artworks.push(sa); changed = true; }
+      });
+      // events by id
+      seed.events.forEach(se => {
+        if (!store.events.some(e => e.id === se.id)) { store.events.push(se); changed = true; }
+      });
+      if (changed) saveStore(store);
+    })();
 
     function saveCurrentUser() {
       if (currentUser) sessionStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
@@ -209,7 +233,7 @@ export function initLegacyApp() {
     function doSearch() {
       const inputEl = document.getElementById('searchInput');
       const q = (inputEl && (inputEl.value || '').trim()) || '';
-      if (!q) { alert('Type a search term like "Sun"'); return; }
+      if (!q) { /* empty search -> go home */ navigateTo('#home'); return; }
       doSearchWithQ(q);
       navigateTo('#search-'+encodeURIComponent(q));
     }
@@ -223,6 +247,14 @@ export function initLegacyApp() {
       }
     });
 
+    // Also attach a direct listener to the search button if present so React-rendered
+    // header buttons respond immediately (this avoids edge cases where delegated clicks
+    // may not feel responsive in some UIs).
+    const _searchBtn = document.getElementById('searchBtn');
+    if (_searchBtn) {
+      _searchBtn.addEventListener('click', (e) => { e.preventDefault(); doSearch(); });
+    }
+
     // Global key listener: Enter inside the search input runs search
     document.addEventListener('keydown', (e) => {
       const active = document.activeElement;
@@ -234,29 +266,43 @@ export function initLegacyApp() {
 
     function doSearchWithQ(rawQ) {
       const q = (rawQ||'').trim().toLowerCase();
-      // artworks that match title/description
-      const byText = store.artworks.filter(a => (a.title||'').toLowerCase().includes(q) || (a.description||'').toLowerCase().includes(q));
+      const tokens = q.split(/\s+/).filter(Boolean);
+
+      // helper: does text contain any token?
+      const containsAny = (text) => {
+        if (!tokens.length) return false;
+        const t = (text||'').toLowerCase();
+        return tokens.some(tok => t.indexOf(tok) !== -1);
+      };
+
+      // artworks that match title/description or artist fields
+      const byText = store.artworks.filter(a => containsAny((a.title||'') + ' ' + (a.description||'')));
+
       // artists that match name/bio
-      const artistResults = store.artists.filter(a => (a.name||'').toLowerCase().includes(q) || (a.bio||'').toLowerCase().includes(q));
-      // include artworks whose artist matches the query
+      const artistResults = store.artists.filter(a => containsAny((a.name||'') + ' ' + (a.bio||'')));
+
+      // include artworks whose artist matches the tokens
       const byArtistMatch = store.artworks.filter(a => {
         const artArtist = artistById(a.artistId);
         if (!artArtist) return false;
-        return (artArtist.name||'').toLowerCase().includes(q) || (artArtist.bio||'').toLowerCase().includes(q);
+        return containsAny((artArtist.name||'') + ' ' + (artArtist.bio||''));
       });
-      // merge and dedupe artwork results
+
+      // merge and dedupe artwork results (include both matches)
       const mergedArtsMap = {};
-      byText.concat(byArtistMatch).forEach(a => { mergedArtsMap[a.id] = a; });
+      byText.concat(byArtistMatch).forEach(a => { if (a && a.id) mergedArtsMap[a.id] = a; });
       const artResults = Object.keys(mergedArtsMap).map(k => mergedArtsMap[k]);
 
-      renderTemplateSearch(artResults, artistResults);
+      renderTemplateSearch(artResults, artistResults, rawQ);
       const si = document.getElementById('searchInput'); if (si) si.value = rawQ;
     }
 
-    function renderTemplateSearch(arts, artists) {
+    function renderTemplateSearch(arts, artists, rawQ) {
       const template = document.getElementById('searchResultsTemplate');
       if (!template) return;
       const clone = template.content.cloneNode(true);
+      const heading = clone.querySelector('h3');
+      if (heading) heading.textContent = rawQ ? `Search Results for "${rawQ}"` : 'Search Results';
       const artResults = clone.querySelector('#artResults');
       const artistResults = clone.querySelector('#artistResults');
 
@@ -306,6 +352,8 @@ export function initLegacyApp() {
         renderCartPage();
       } else if (hash === '#admin') {
         renderAdminPanel();
+      } else if (hash === '#curator') {
+        renderCuratorPanel();
       } else {
         renderHome();
       }
@@ -523,8 +571,19 @@ export function initLegacyApp() {
           </div>
         </form>
       </div>
+      <div class="section">
+        <h4>Curator Login</h4>
+        <form id="curatorLoginForm" class="form" onsubmit="return false;">
+          <input id="c_email" placeholder="Email" required>
+          <input id="c_pass" type="password" placeholder="Password" required>
+          <div style="display:flex;gap:8px">
+            <button id="cLoginBtn" class="btn">Login</button>
+            <button id="cRegBtn" class="btn secondary">Register</button>
+          </div>
+        </form>
+      </div>
     </div>
-    <div style="margin-top:12px" class="muted">To verify artist accounts, admin must approve registrations. Admin panel: <a href="#admin">Admin</a></div>
+    <div style="margin-top:12px" class="muted">To verify artist & curator accounts, admin must approve registrations. Admin panel: <a href="#admin">Admin</a> • Curator panel: <a href="#curator">Curator</a></div>
   `;
 
       const vLoginBtn = document.getElementById('vLoginBtn');
@@ -535,9 +594,9 @@ export function initLegacyApp() {
       if (vLoginBtn) vLoginBtn.addEventListener('click', ()=> {
         const email = document.getElementById('v_email').value.trim();
         const pass = document.getElementById('v_pass').value;
-        const user = store.users.find(u=>u.email===email && u.password===pass && (u.role==='visitor' || u.role==='admin'));
-        if (user) { currentUser = user; saveCurrentUser(); alert(user.role==='admin'? 'Admin logged in.' : 'Visitor logged in.'); updateHeader(); navigateTo('#home'); }
-        else alert('Invalid visitor/admin credentials or account not found.');
+        const user = store.users.find(u=>u.email===email && u.password===pass && (u.role==='visitor' || u.role==='admin' || u.role==='curator'));
+        if (user) { currentUser = user; saveCurrentUser(); alert(user.role==='admin'? 'Admin logged in.' : (user.role==='curator' ? 'Curator logged in.' : 'Visitor logged in.')); updateHeader(); navigateTo('#home'); }
+        else alert('Invalid visitor/admin/curator credentials or account not found.');
       });
 
       if (aLoginBtn) aLoginBtn.addEventListener('click', ()=> {
@@ -556,6 +615,24 @@ export function initLegacyApp() {
         }
       });
 
+      const cLoginBtnEl = document.getElementById('cLoginBtn');
+      const cRegBtnEl = document.getElementById('cRegBtn');
+      if (cLoginBtnEl) cLoginBtnEl.addEventListener('click', ()=> {
+        const email = document.getElementById('c_email').value.trim();
+        const pass = document.getElementById('c_pass').value;
+        const user = store.users.find(u=>u.email===email && u.password===pass && u.role==='curator');
+        if (user) {
+          if (user.verified) {
+            currentUser = user; saveCurrentUser(); alert('Curator logged in.'); updateHeader(); navigateTo('#curator');
+          } else {
+            alert('Curator account pending verification by admin.');
+          }
+        } else {
+          alert('Invalid curator credentials or account not found.');
+        }
+      });
+      if (cRegBtnEl) cRegBtnEl.addEventListener('click', ()=> navigateTo('#register?role=curator'));
+
       if (vRegBtn) vRegBtn.addEventListener('click', ()=> navigateTo('#register?role=visitor'));
       if (aRegBtn) aRegBtn.addEventListener('click', ()=> navigateTo('#register?role=artist'));
     }
@@ -572,12 +649,13 @@ export function initLegacyApp() {
       <input id="reg_email" placeholder="Email" required>
       <input id="reg_password" type="password" placeholder="Password" required>
       ${role==='artist' ? '<input id="reg_bio" placeholder="Short artist bio (for approvals)">' : ''}
+      ${role==='curator' ? '<input id="reg_bio" placeholder="Short curator bio (for approvals)"><input id="reg_photo" placeholder="Photo URL (optional)">' : ''}
       <div style="display:flex;gap:8px">
-        <button class="btn" id="doRegister">${role==='artist' ? 'Register as Artist' : 'Register as Visitor'}</button>
+        <button class="btn" id="doRegister">${role==='artist' ? 'Register as Artist' : (role==='curator' ? 'Register as Curator' : 'Register as Visitor')}</button>
         <button class="btn secondary" id="cancelReg">Cancel</button>
       </div>
     </form>
-    <div style="margin-top:8px" class="muted">Artist accounts require admin verification. After registering, please inform your admin to verify your account.</div>
+    <div style="margin-top:8px" class="muted">${role==='visitor' ? 'Visitor accounts are active immediately.' : 'Accounts require admin verification. After registering, please inform your admin to verify your account.'}</div>
   `;
       const cancel = document.getElementById('cancelReg');
       const doRegister = document.getElementById('doRegister');
@@ -594,7 +672,7 @@ export function initLegacyApp() {
           store.users.push(newUser);
           saveStore(store);
           currentUser = newUser; saveCurrentUser(); updateHeader(); alert('Visitor registered and signed in.'); navigateTo('#home');
-        } else {
+        } else if (role==='artist') {
           const artistId = 'a_'+Date.now();
           const newArtist = { id: artistId, name, bio: (document.getElementById('reg_bio')?.value||''), verified:false, photo:'' , email };
           store.artists.push(newArtist);
@@ -603,6 +681,15 @@ export function initLegacyApp() {
           store.users.push(userRec);
           saveStore(store);
           alert('Artist registered. Await admin verification.');
+          navigateTo('#login');
+        } else if (role==='curator') {
+          const bio = document.getElementById('reg_bio')?.value||'';
+          const photo = document.getElementById('reg_photo')?.value||'';
+          const userId = 'u_'+Date.now();
+          const userRec = { id:userId, name, email, password, role:'curator', verified:false, bio, photo };
+          store.users.push(userRec);
+          saveStore(store);
+          alert('Curator registered. Await admin verification.');
           navigateTo('#login');
         }
       });
@@ -635,34 +722,68 @@ export function initLegacyApp() {
       if (!ensureAdmin()) { alert('Admin login required.'); navigateTo('#login'); return; }
       const content = document.getElementById('pageContent');
       if (!content) return;
-      content.innerHTML = `<h3>Admin Panel</h3><div class="admin-grid"><div class="section"><h4>Artist Verifications</h4><div id="artistVerifications"></div></div><div class="section"><h4>Events</h4><div id="adminEvents"></div><div style="margin-top:8px"><button id="createEventBtn" class="btn">Create Event</button></div></div></div>`;
-      const list = document.getElementById('artistVerifications');
-      const pending = store.artists.filter(a=>!a.verified);
-      if (!pending.length) list.innerHTML = '<div class="muted">No pending artist verifications.</div>';
-      pending.forEach(a=>{
+      // Admin handles artist verifications and now curator verifications as well.
+      content.innerHTML = `<h3>Admin Panel</h3>
+        <div class="admin-grid">
+          <div class="section"><h4>Artist Verifications</h4><div id="artistVerifications"></div></div>
+          <div class="section"><h4>Curator Verifications</h4><div id="curatorVerifications"></div></div>
+        </div>`;
+
+      // --- Artist verifications ---
+      const artistList = document.getElementById('artistVerifications');
+      const pendingArtists = store.artists.filter(a=>!a.verified);
+      if (!pendingArtists.length) artistList.innerHTML = '<div class="muted">No pending artist verifications.</div>';
+      pendingArtists.forEach(a=>{
         const r = document.createElement('div'); r.className='list-row';
         r.innerHTML = `<div class="thumb"><img src="${a.photo||'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=60'}" alt=""></div>
       <div class="meta"><strong>${escapeHtml(a.name)}</strong><div class="muted">${escapeHtml(a.bio||'')}</div></div>
       <div><button class="btn" data-id="${a.id}">Approve</button></div>`;
-        list.appendChild(r);
+        artistList.appendChild(r);
       });
 
-      list.addEventListener('click', (ev)=>{
+      artistList.addEventListener('click', (ev)=>{
         if (ev.target.matches('button[data-id]')) {
           const id = ev.target.getAttribute('data-id'); approveArtistById(id);
         }
       });
 
-      const adminEvents = document.getElementById('adminEvents');
-      if (!store.events.length) adminEvents.innerHTML = '<div class="muted">No events yet.</div>';
+      // --- Curator verifications ---
+      const curatorList = document.getElementById('curatorVerifications');
+      const pendingCurators = store.users.filter(u=>u.role==='curator' && !u.verified);
+      if (!pendingCurators.length) curatorList.innerHTML = '<div class="muted">No pending curator verifications.</div>';
+      pendingCurators.forEach(u=>{
+        const r = document.createElement('div'); r.className='list-row';
+        r.innerHTML = `<div class="thumb"><img src="${u.photo||'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=60'}" alt=""></div>
+      <div class="meta"><strong>${escapeHtml(u.name)}</strong><div class="muted">${escapeHtml(u.bio||'')}</div></div>
+      <div><button class="btn" data-curator-id="${u.id}">Approve</button></div>`;
+        curatorList.appendChild(r);
+      });
+
+      curatorList.addEventListener('click', (ev)=>{
+        if (ev.target.matches('button[data-curator-id]')) {
+          const id = ev.target.getAttribute('data-curator-id'); approveCuratorById(id);
+        }
+      });
+    }
+
+    // Curator panel: create and remove events
+    function renderCuratorPanel() {
+      if (!ensureCurator()) { alert('Curator login required.'); navigateTo('#login'); return; }
+      const content = document.getElementById('pageContent');
+      if (!content) return;
+      content.innerHTML = `<h3>Curator Panel</h3><div class="section"><h4>Events</h4><div id="curatorEvents"></div><div style="margin-top:8px"><button id="createEventBtn" class="btn">Create Event</button></div></div>`;
+
+      const curatorEvents = document.getElementById('curatorEvents');
+      if (!store.events.length) curatorEvents.innerHTML = '<div class="muted">No events yet.</div>';
       store.events.forEach(ev=>{
         const r = document.createElement('div'); r.className='list-row';
         r.innerHTML = `<div class="thumb"><img src="${ev.items && ev.items[0] ? (artById(ev.items[0])?.image||'') : ''}" alt=""></div>
       <div class="meta"><strong>${escapeHtml(ev.title)}</strong><div class="muted">${ev.date} • ${ev.time} • ${escapeHtml(ev.venue)}</div></div>
       <div style="min-width:90px;text-align:right"><button class="btn secondary" data-delete="${ev.id}">Delete</button></div>`;
-        adminEvents.appendChild(r);
+        curatorEvents.appendChild(r);
       });
-      adminEvents.addEventListener('click', (ev)=>{ if (ev.target.matches('button[data-delete]')) deleteEventById(ev.target.getAttribute('data-delete')); });
+
+      curatorEvents.addEventListener('click', (ev)=>{ if (ev.target.matches('button[data-delete]')) deleteEventById(ev.target.getAttribute('data-delete')); });
 
       const createEventBtn = document.getElementById('createEventBtn');
       if (createEventBtn) createEventBtn.addEventListener('click', ()=> {
@@ -670,13 +791,35 @@ export function initLegacyApp() {
         const date = prompt('Date (YYYY-MM-DD):'); if (!date) return;
         const time = prompt('Time (e.g. 6:00 PM):') || '';
         const venue = prompt('Venue:') || '';
-        const curatorName = prompt('Curator name:') || '';
+        const curatorName = currentUser ? currentUser.name : (prompt('Curator name:')||'');
         const curatorPhoto = prompt('Curator photo URL (optional):') || '';
-        const itemsStr = prompt('Comma separated artwork IDs to include (e.g. art1,art2):');
-        const items = itemsStr ? itemsStr.split(',').map(s=>s.trim()).filter(Boolean) : [];
+
+        // Ask how many artworks to add and collect their titles & image URLs
+        const numStr = prompt('How many artworks would you like to add to this event? (enter a number)') || '0';
+        const num = Math.max(0, parseInt(numStr, 10) || 0);
+
+        // ensure a curator artist profile exists to associate uploaded works
+        const curatorArtistId = 'a_curator_'+(currentUser ? currentUser.id : ('anon_'+Date.now()));
+        if (!store.artists.find(a=>a.id===curatorArtistId)) {
+          store.artists.push({ id: curatorArtistId, name: curatorName, bio: 'Works added by curator', verified:true, photo: curatorPhoto || '' });
+        }
+
+        const items = [];
+        for (let i=0;i<num;i++) {
+          const atitle = prompt(`Artwork #${i+1} title:`) || '';
+          if (!atitle) continue;
+          const aimg = prompt(`Artwork #${i+1} image URL:`) || '';
+          const adesc = prompt(`Artwork #${i+1} short description (optional):`) || '';
+          const aprice = Number(prompt(`Artwork #${i+1} price (number):`) || '0') || 0;
+          const aid = 'art_'+Date.now() + '_' + i;
+          const newArt = { id: aid, title: atitle.trim(), artistId: curatorArtistId, description: adesc.trim(), image: aimg.trim() || '', price: aprice, featured:false, videos:[] };
+          store.artworks.push(newArt);
+          items.push(aid);
+        }
+
         const id = 'e_'+Date.now();
         store.events.push({ id, title, venue, date, time, curator:{ name:curatorName, photo:curatorPhoto }, items });
-        saveStore(store); alert('Event created.'); renderAdminPanel(); renderCalendar();
+        saveStore(store); alert('Event created.'); renderCuratorPanel(); renderCalendar();
       });
     }
 
@@ -685,6 +828,15 @@ export function initLegacyApp() {
       artist.verified = true;
       store.users.filter(u=>u.role==='artist' && u.artistId===id).forEach(u=>u.verified=true);
       saveStore(store); alert('Artist approved.'); renderAdminPanel();
+    }
+    
+    function approveCuratorById(id) {
+      const user = store.users.find(u=>u.id===id);
+      if (!user) return alert('Curator not found');
+      user.verified = true;
+      saveStore(store);
+      alert('Curator approved.');
+      renderAdminPanel();
     }
         function deleteEventById(id) { store.events = store.events.filter(e=>e.id!==id); saveStore(store); alert('Event removed'); renderAdminPanel(); renderCalendar(); }
 
@@ -704,7 +856,8 @@ export function initLegacyApp() {
 
     function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
     function ensureLoggedIn() { if (currentUser) return true; alert('Please login first.'); navigateTo('#login'); return false; }
-    function ensureAdmin() { return currentUser && currentUser.role==='admin'; }
+  function ensureAdmin() { return currentUser && currentUser.role==='admin'; }
+  function ensureCurator() { return currentUser && currentUser.role==='curator'; }
 
     function initApp() {
       store.cart = store.cart || [];
