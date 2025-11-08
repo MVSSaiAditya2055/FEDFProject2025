@@ -20,8 +20,8 @@ export function initLegacyApp() {
         { id:'art3', title:'Golden Hour Study', artistId:'a1', description:'Study in light and shadow, capturing late afternoon.', image:'https://images.unsplash.com/photo-1481349518771-20055b2a7b24?auto=format&fit=crop&w=900&q=80', price:450, featured:false, videos:[] }
       ],
       events: [
-        { id:'e1', title:'Solar Narratives - An Exhibition', venue:'City Art Hall', date:'2025-09-25', time:'4:00 PM', curator: { name:'R. Sen', photo:'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=60' }, items:['art1','art3'] },
-        { id:'e2', title:'Weave & Pattern', venue:'Studio 12', date:'2025-10-05', time:'6:00 PM', curator: { name:'Leena Gupta', photo:'https://images.unsplash.com/photo-1545996124-1b4b9ba6fdb4?auto=format&fit=crop&w=100&q=60' }, items:['art2'] }
+        { id:'e1', title:'Solar Narratives - An Exhibition', venue:'City Art Hall', date:'2025-11-13', time:'4:00 PM', curator: { name:'R. Sen', photo:'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=60' }, items:['art1','art3'] },
+        { id:'e2', title:'Weave & Pattern', venue:'Studio 12', date:'2025-11-29', time:'6:00 PM', curator: { name:'Leena Gupta', photo:'https://images.unsplash.com/photo-1545996124-1b4b9ba6fdb4?auto=format&fit=crop&w=100&q=60' }, items:['art2'] }
       ]
     };
 
