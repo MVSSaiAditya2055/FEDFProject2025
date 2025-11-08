@@ -1,5 +1,9 @@
 import React, { useEffect } from 'react'
 import { initLegacyApp } from './legacy'
+import Header from './components/Header'
+import Carousel from './components/Carousel'
+import Home from './components/Home'
+import Calendar from './components/Calendar'
 
 export default function App() {
   useEffect(() => {
@@ -10,63 +14,15 @@ export default function App() {
 
   return (
     <>
-      <header>
-        <button id="homeBtn" className="btn home-btn" title="Home" aria-label="Home">🏠</button>
-        <div className="brand">Virtual Art Gallery — FEDF-PS16</div>
-
-        <div className="search-container">
-          <div className="search" role="search">
-            <input id="searchInput" type="search" placeholder="Search artists, art pieces, keywords (e.g. Sun)..." aria-label="Search" />
-            <button id="searchBtn">Search</button>
-          </div>
-        </div>
-
-        <div className="header-actions">
-          <div id="greeting" className="muted" style={{ fontSize: '0.95rem', cursor: 'pointer' }}></div>
-          <button id="loginBtn" className="btn secondary">Login / Register</button>
-          <button id="cartBtn" className="btn" title="View cart">Cart (0)</button>
-        </div>
-      </header>
+      <Header />
 
       <main id="app">
         <section>
-          <div className="carousel section" id="carouselSection">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <strong>Featured</strong>
-              <small className="muted">Click slideshow to open item</small>
-            </div>
-            <div className="carousel-stage" id="carouselStage" tabIndex={0} aria-live="polite"></div>
-          </div>
-
-          <div id="pageContent" className="section" aria-live="polite">
-            <h3>Welcome to the Virtual Art Gallery</h3>
-            <p className="muted">Explore artworks, learn cultural histories, join virtual tours and attend exhibitions. Use the search bar above to find art pieces or artists — example search term: <code>Sun</code>.</p>
-
-            <div style={{ marginTop: 12 }}>
-              <h4>Recent Art Pieces</h4>
-              <div id="recentList"></div>
-            </div>
-          </div>
+          <Carousel />
+          <Home />
         </section>
 
-        <aside className="calendar" aria-label="Events calendar">
-          <div className="month-title">
-            <strong id="calMonthTitle"></strong>
-            <div>
-              <button id="prevMonth" className="btn secondary" style={{ padding: '6px 8px' }}>◀</button>
-              <button id="nextMonth" className="btn secondary" style={{ padding: '6px 8px' }}>▶</button>
-            </div>
-          </div>
-          <div className="cal-weekdays" id="calWeekdays">
-            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
-          </div>
-          <div className="cal-grid" id="calendarGrid"></div>
-
-          <div style={{ marginTop: 12 }}>
-            <h4 style={{ marginBottom: 8 }}>Upcoming Events</h4>
-            <div id="upcomingEventsList"></div>
-          </div>
-        </aside>
+        <Calendar />
       </main>
 
       <footer>
